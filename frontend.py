@@ -1,45 +1,34 @@
 import streamlit as st
-import requests
+import os
+from ai_logic import chatbot  # Import directly!
+from langchain_core.messages import HumanMessage
+from dotenv import load_dotenv
 
-st.set_page_config(page_title="Multi-Agent UI", page_icon="🤖")
+load_dotenv()
+
+st.set_page_config(page_title="AI Agent Assistant", page_icon="🤖")
 st.title("🤖 AI Agent Assistant")
-
-API_URL = "http://localhost:8000/chat"
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display Chat History
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if prompt := st.chat_input("How can I help with your tasks?"):
+if prompt := st.chat_input("What can I do for you?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        placeholder = st.empty()
-        full_response = ""
+        # We call the chatbot directly here, no requests.post() needed!
+        inputs = {"messages": [HumanMessage(content=prompt)]}
+        config = {"configurable": {"thread_id": "render_user"}}
         
-        # Send request to FastAPI
-        payload = {"message": prompt, "thread_id": "user_1"}
+        result = chatbot.invoke(inputs, config)
+        response = result["messages"][-1].content
         
-        with requests.post(API_URL, json=payload, stream=True) as r:
-            for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
-                if chunk:
-                    full_response += chunk
-                    placeholder.markdown(full_response + "▌")
-        
-        placeholder.markdown(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-import subprocess
-import sys
-
-def run_streamlit():
-    # This runs the streamlit command as a background process
-    subprocess.run([sys.executable, "-m", "streamlit", "run", "mf_ai_agent/frontend.py"])
-
-if __name__ == "__main__":
-    run_streamlit()
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})

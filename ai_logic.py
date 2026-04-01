@@ -25,22 +25,39 @@ from todoist_api_python.api import TodoistAPI
 load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+import json
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 def get_calendar_service():
-    """Handles Google OAuth2 authentication."""
+    """Handles Google OAuth2 authentication via Environment Variables."""
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    # 1. Try to load the REFRESH TOKEN (token.json equivalent)
+    token_json = os.getenv("GOOGLE_TOKEN_JSON")
+    if token_json:
+        creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+    
+    # 2. If no valid creds, try to use the CLIENT SECRETS (credentials.json equivalent)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            # On Render, we can't run a local server for login.
+            # We must load the credentials from an env var.
+            creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+            if not creds_json:
+                raise Exception("Google Credentials not found in environment variables!")
+            
+            # Use the dictionary directly instead of a filename
+            creds_info = json.loads(creds_json)
+            flow = InstalledAppFlow.from_client_config(creds_info, SCOPES)
+            
+            # NOTE: run_local_server() only works on your PC. 
+            # For Render, you must have a valid GOOGLE_TOKEN_JSON already set.
             creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    return build('calendar', 'v3', credentials=creds)
 
+    return build('calendar', 'v3', credentials=creds)
 # --- 2. THE TOOLS ---
 
 @tool
